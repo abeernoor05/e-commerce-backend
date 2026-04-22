@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: order-service
-        image: abeer09/order-service:b032e02aa87364877ceb568925b747c5b5c3e4c0
+        image: abeer09/order-service:4172fbbc47636b0a3116e25e940974bf6e31662f
         env:
         - name: PRODUCT_SERVICE_URL
           value: http://product-service
