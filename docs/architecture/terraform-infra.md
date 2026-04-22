@@ -1,20 +1,20 @@
 # Terraform Infrastructure Deep Dive
 
-This document explains exactly what Terraform creates and why each piece exists.
+This document describes the infrastructure layer defined under infra/terraform and explains why each resource exists.
 
-## What Terraform Creates
+## Scope
 
-Terraform entrypoint:
+Environment entrypoint:
 
 - infra/terraform/environments/dev/main.tf
 
-Modules used:
+Composed modules:
 
-- network module
-- security module
-- compute module
+- network
+- security
+- compute
 
-## 1. Network Layer
+## Network Module
 
 Files:
 
@@ -22,32 +22,31 @@ Files:
 - infra/terraform/modules/network/variables.tf
 - infra/terraform/modules/network/outputs.tf
 
-Resources:
+Managed resources:
 
-1. aws_vpc.main
-- Creates a dedicated VPC.
-- CIDR comes from `vpc_cidr` (default 10.0.0.0/16).
-- DNS support and DNS hostnames are enabled.
+1. VPC
+- resource: aws_vpc.main
+- purpose: isolated network boundary for project resources
+- key setting: DNS support and DNS hostnames enabled
 
-2. aws_subnet.public
-- Creates one public subnet in the VPC.
-- CIDR comes from `public_subnet_cidr` (default 10.0.1.0/24).
-- `map_public_ip_on_launch = true` so EC2 gets a public IP.
-- AZ is either:
-  - `availability_zone` if you set it, or
-  - first available AZ automatically.
+2. Public subnet
+- resource: aws_subnet.public
+- purpose: host EC2 instance with public internet routing
+- key setting: map_public_ip_on_launch = true
 
-3. aws_internet_gateway.igw
-- Connects your VPC to the internet.
+3. Internet gateway
+- resource: aws_internet_gateway.igw
+- purpose: internet connectivity for subnet resources
 
-4. aws_route_table.public
-- Adds route `0.0.0.0/0 -> Internet Gateway`.
-- This is what gives outbound internet and public reachability.
+4. Public route table and default route
+- resources: aws_route_table.public, aws_route.public_internet
+- purpose: route outbound traffic to internet gateway
 
-5. aws_route_table_association.public
-- Attaches the route table to the public subnet.
+5. Route table association
+- resource: aws_route_table_association.public
+- purpose: attach public route table to public subnet
 
-## 2. Security Layer
+## Security Module
 
 Files:
 
@@ -55,30 +54,24 @@ Files:
 - infra/terraform/modules/security/variables.tf
 - infra/terraform/modules/security/outputs.tf
 
-Resource:
+Managed resource:
 
-1. aws_security_group.app
+1. Application security group
+- resource: aws_security_group.app
+- purpose: least-privilege inbound controls plus outbound egress
 
-Ingress rules:
+Ingress profile:
 
-- SSH 22 from `allowed_ssh_cidrs`
-- HTTP 80 from `allowed_public_http_cidrs`
-- HTTPS 443 from `allowed_public_http_cidrs`
-- Kubernetes API 6443 from `allowed_k8s_api_cidrs`
-- NodePort 30000-32767 from `allowed_nodeport_cidrs`
+- tcp/22 (SSH) from allowed_ssh_cidrs
+- tcp/80 and tcp/443 from allowed_public_http_cidrs
+- tcp/6443 (k3s API) from allowed_k8s_api_cidrs
+- tcp/30000-32767 (NodePort) from allowed_nodeport_cidrs
 
-Egress rule:
+Egress profile:
 
-- All outbound traffic allowed (0.0.0.0/0)
+- all outbound allowed to 0.0.0.0/0
 
-Why these ports:
-
-- 22: SSH administration and Ansible access.
-- 80/443: app access through reverse proxy or ingress later.
-- 6443: k3s API server remote access.
-- 30000-32767: NodePort services for quick external exposure in project setup.
-
-## 3. Compute Layer
+## Compute Module
 
 Files:
 
@@ -86,99 +79,82 @@ Files:
 - infra/terraform/modules/compute/variables.tf
 - infra/terraform/modules/compute/outputs.tf
 
-Resources/Data:
+Managed resources and data:
 
-1. aws_key_pair.deployer
-- Uploads your public SSH key to AWS.
-- EC2 instance uses this key pair for SSH login.
+1. SSH key pair registration
+- resource: aws_key_pair.deployer
+- purpose: allow SSH access with local public key
 
-2. data.aws_ami.ubuntu
-- Dynamically selects latest Ubuntu 22.04 LTS image from Canonical.
-- Avoids hardcoded AMI IDs.
+2. Ubuntu image lookup
+- data source: data.aws_ami.ubuntu
+- purpose: select current Ubuntu 22.04 LTS AMI automatically
 
-3. aws_instance.app_server
-- Creates EC2 instance in the public subnet.
-- Uses selected instance type (m7i-flex.large default).
-- Attaches security group from security module.
-- Associates public IP.
-- Configures gp3 root volume with configurable size.
-- Enforces IMDSv2 (`http_tokens = required`) for better metadata security.
-- Applies tags for Project and ManagedBy metadata.
+3. EC2 instance
+- resource: aws_instance.app_server
+- purpose: single-node host for Docker and k3s workloads
+- highlights:
+  - configurable instance type
+  - gp3 root volume with configurable size
+  - IMDSv2 enforced
+  - security group attachment from security module
+  - public IP association through subnet configuration
 
-Safety guard:
+Policy guard:
 
-- If `free_tier_only = true`, Terraform fails unless instance type is t2.micro or t3.micro.
+- if free_tier_only = true, only t2.micro or t3.micro are accepted
 
-## Variable Flow (Environment -> Modules)
+## Important Variables
 
 Defined in:
 
 - infra/terraform/environments/dev/variables.tf
 
-Passed in:
-
-- infra/terraform/environments/dev/main.tf
-
-Main variables you control:
+Commonly adjusted values:
 
 - aws_region
-- project_name
-- vpc_cidr
-- public_subnet_cidr
-- availability_zone
 - instance_type
 - root_volume_size_gb
 - free_tier_only
 - allowed_ssh_cidrs
-- allowed_public_http_cidrs
-- allowed_nodeport_cidrs
 - allowed_k8s_api_cidrs
+- allowed_nodeport_cidrs
 - public_key_path
 
-Example values:
+Template values file:
 
 - infra/terraform/environments/dev/terraform.tfvars.example
 
-## Outputs You Get After Apply
+## Outputs and Their Use
 
-File:
+Output definitions:
 
 - infra/terraform/environments/dev/outputs.tf
 
-Outputs:
+Key outputs:
 
 - instance_public_ip
 - instance_public_dns
 - instance_id
-- key_pair_name
+- security_group_id
 - vpc_id
 - public_subnet_id
-- public_subnet_az
-- security_group_id
 
-How these are used next:
+Operational use:
 
-1. Use instance_public_ip to generate Ansible inventory.
-2. Use SSH key + instance_public_ip to run bootstrap playbook.
-3. Deploy k3s workloads after bootstrap.
+1. instance_public_ip is used to generate Ansible inventory.
+2. security_group_id helps verify open/closed ingress rules.
+3. instance_public_dns is useful for browser and API testing.
 
-## End-to-End Provisioning Flow
+## Standard Provisioning Lifecycle
 
 1. terraform init
-- Downloads AWS provider.
-
 2. terraform plan
-- Shows exactly what resources will be created/changed.
-
 3. terraform apply
-- Creates VPC, subnet, route, security group, key pair, EC2.
-
 4. terraform output -raw instance_public_ip
-- Gives IP for Ansible inventory generation.
 
-## Security Recommendation for Real Use
+## Production Hardening Recommendations
 
-Before production-like testing, replace `0.0.0.0/0` CIDRs with your own public IP CIDR where possible, especially for:
-
-- allowed_ssh_cidrs
-- allowed_k8s_api_cidrs
+1. restrict SSH and Kubernetes API ingress to your own public CIDR
+2. avoid broad NodePort exposure when not actively demoing
+3. add AWS IAM roles and SSM Session Manager for improved access control
+4. move to managed control plane and database for resilient production workloads

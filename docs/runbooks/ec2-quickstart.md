@@ -1,68 +1,133 @@
 # EC2 Single-Node Quickstart
 
-This project runs on one EC2 machine with k3s installed on that same machine.
+This runbook provisions and deploys the full stack on one EC2 instance using Terraform, Ansible, and k3s.
 
-## 1. Prepare Terraform variables
+## Prerequisites
 
-Create a local variables file from the example:
+- AWS credentials configured locally
+- Terraform installed
+- Ansible installed
+- SSH key pair available at ~/.ssh/id_rsa and ~/.ssh/id_rsa.pub
+- kubectl installed locally
 
-- `cp infra/terraform/environments/dev/terraform.tfvars.example infra/terraform/environments/dev/terraform.tfvars`
+## 1. Configure Terraform input values
 
-Recommended profile:
+```bash
+cp infra/terraform/environments/dev/terraform.tfvars.example infra/terraform/environments/dev/terraform.tfvars
+```
 
-- `instance_type = "m7i-flex.large"`
-- `free_tier_only = false`
-- `root_volume_size_gb = 30`
+Recommended profile for this project:
 
-Alternative profile:
+- instance_type = m7i-flex.large
+- free_tier_only = false
+- root_volume_size_gb = 30
 
-- `instance_type = "c7i-flex.large"`
+Lean alternative:
 
-Recommended security tightening:
+- instance_type = c7i-flex.large
 
-- Set `allowed_ssh_cidrs` to your own public IP CIDR instead of `0.0.0.0/0`.
-- Set `allowed_k8s_api_cidrs` to your own public IP CIDR.
+Security recommendation:
 
-## 2. Provision EC2 with Terraform
+- set allowed_ssh_cidrs to your public CIDR
+- set allowed_k8s_api_cidrs to your public CIDR
 
-- `cd infra/terraform/environments/dev`
-- `terraform init`
-- `terraform plan -out tfplan`
-- `terraform apply tfplan`
+## 2. Provision infrastructure with Terraform
 
-Capture public IP:
+```bash
+cd infra/terraform/environments/dev
+terraform init
+terraform plan -out tfplan
+terraform apply tfplan
+```
 
-- `terraform output -raw instance_public_ip`
+Capture useful outputs:
 
-Optional useful outputs:
-
-- `terraform output -raw instance_public_dns`
-- `terraform output vpc_id`
-- `terraform output security_group_id`
+```bash
+terraform output -raw instance_public_ip
+terraform output -raw instance_public_dns
+terraform output security_group_id
+```
 
 ## 3. Generate Ansible inventory
 
 From repository root:
 
-- `./scripts/render-ansible-inventory.sh <EC2_PUBLIC_IP> ~/.ssh/id_rsa ubuntu`
+```bash
+./scripts/render-ansible-inventory.sh <EC2_PUBLIC_IP> ~/.ssh/id_rsa ubuntu
+```
 
-## 4. Bootstrap EC2 with Ansible
+## 4. Bootstrap EC2 host
 
-From repository root:
+```bash
+ansible-playbook -i infra/ansible/inventory/hosts.ini infra/ansible/playbooks/bootstrap.yml
+```
 
-- `ansible-playbook -i infra/ansible/inventory/hosts.ini infra/ansible/playbooks/bootstrap.yml`
+Bootstrap installs and configures:
 
-This installs:
+- base OS packages
+- Docker engine
+- k3s single-node cluster
 
-- base packages
-- Docker
-- k3s
+## 5. Configure kubeconfig locally
 
-## 5. Deploy Kubernetes manifests
+Fetch kubeconfig from EC2 and adjust server endpoint as needed:
 
-- `kubectl apply -k deploy/k8s/overlays/dev`
+```bash
+mkdir -p ~/.kube
+ssh -i ~/.ssh/id_rsa ubuntu@<EC2_PUBLIC_IP> "sudo cat /etc/rancher/k3s/k3s.yaml" > ~/.kube/config
+```
 
-## Notes
+If certificate SAN does not include your public IP, use SSH tunnel access to 127.0.0.1:16443.
 
-- "Local Kubernetes" in this project means local to the EC2 instance (single-node k3s), not local to your laptop.
-- You can keep this setup for project completion, then migrate to EKS/RDS as an extension.
+## 6. Deploy workloads
+
+```bash
+kubectl apply -k deploy/k8s/overlays/dev
+kubectl get pods -n ecommerce
+kubectl get svc -n ecommerce
+```
+
+Expected services:
+
+- auth-service NodePort 30081
+- product-service NodePort 30082
+- order-service NodePort 30083
+
+## 7. Install and apply ArgoCD application
+
+Install ArgoCD if not already present:
+
+```bash
+kubectl create namespace argocd || true
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+```
+
+Apply application manifest:
+
+```bash
+kubectl apply -f deploy/argocd/application.yaml
+kubectl get applications -n argocd
+```
+
+Expected status: Synced Healthy.
+
+## 8. Validate external access
+
+From browser or curl:
+
+- http://<EC2_PUBLIC_IP>:30081/docs
+- http://<EC2_PUBLIC_IP>:30082/docs
+- http://<EC2_PUBLIC_IP>:30083/docs
+
+Optional scripted validation:
+
+```bash
+./scripts/demo-user-flow.sh <EC2_PUBLIC_IP>
+```
+
+## 9. Teardown (when demo period ends)
+
+```bash
+cd infra/terraform/environments/dev
+terraform destroy
+```

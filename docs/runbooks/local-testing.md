@@ -1,92 +1,114 @@
 # Local Testing Runbook (Docker Compose)
 
-Use this before any cloud deployment.
+Use this runbook to validate the full application flow before any cloud deployment.
 
-## 1. Build and start services
+## Prerequisites
+
+- Docker Engine and Docker Compose plugin installed
+- ports 8001, 8002, and 8003 available on local machine
+
+## 1. Start the stack
 
 From repository root:
 
-- `docker compose build`
-- `docker compose up -d`
-- `docker compose ps`
+```bash
+docker compose build
+docker compose up -d
+docker compose ps
+```
 
-Expected: all three services show `healthy`.
+Expected result:
 
-## 2. Health checks
+- auth-service, product-service, and order-service are running
+- health status shows healthy after startup delay
 
-- Auth: `curl http://localhost:8001/health`
-- Product: `curl http://localhost:8002/health`
-- Order: `curl http://localhost:8003/health`
-
-Expected: each returns status `ok`.
-
-## 3. Auth flow
-
-### Signup
+## 2. Verify health endpoints
 
 ```bash
-curl -X POST http://localhost:8001/auth/signup \
+curl -sS http://localhost:8001/health
+curl -sS http://localhost:8002/health
+curl -sS http://localhost:8003/health
+```
+
+Each endpoint should return JSON containing status: ok.
+
+## 3. Validate authentication flow
+
+Create a user:
+
+```bash
+curl -sS -X POST http://localhost:8001/auth/signup \
   -H "Content-Type: application/json" \
-  -d '{"email":"demo@example.com","password":"password123","full_name":"Demo User"}'
+  -d '{"email":"demo@example.com","password":"Passw0rd!","full_name":"Demo User"}'
 ```
 
-### Login
+Login and capture token:
 
 ```bash
-curl -X POST http://localhost:8001/auth/login \
+TOKEN=$(curl -sS -X POST http://localhost:8001/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"demo@example.com","password":"password123"}'
+  -d '{"email":"demo@example.com","password":"Passw0rd!"}' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+echo "$TOKEN"
 ```
 
-Copy `access_token` from response.
-
-### Me
+Fetch current user profile:
 
 ```bash
-curl http://localhost:8001/auth/me \
-  -H "Authorization: Bearer <ACCESS_TOKEN>"
+curl -sS http://localhost:8001/auth/me \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-## 4. Product flow
+## 4. Validate product flow
 
-### Create product
+Create a product and capture product ID:
 
 ```bash
-curl -X POST http://localhost:8002/products \
+PRODUCT_ID=$(curl -sS -X POST http://localhost:8002/products \
   -H "Content-Type: application/json" \
-  -d '{"name":"Desk Lamp","description":"LED","category":"home","price":19.99,"inventory_count":6}'
+  -d '{"name":"Desk Lamp","description":"LED lamp","category":"home","price":19.99,"inventory_count":6}' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+echo "$PRODUCT_ID"
 ```
 
-Copy returned `id` as `<PRODUCT_ID>`.
-
-### Check availability
+Check availability:
 
 ```bash
-curl "http://localhost:8002/products/<PRODUCT_ID>/availability?quantity=2"
+curl -sS "http://localhost:8002/products/$PRODUCT_ID/availability?quantity=2"
 ```
 
-## 5. Order flow (calls Product service)
+## 5. Validate order flow
 
-### Create order
+Create order:
 
 ```bash
-curl -X POST http://localhost:8003/orders \
+curl -sS -X POST http://localhost:8003/orders \
   -H "Content-Type: application/json" \
-  -d '{"product_id":<PRODUCT_ID>,"quantity":2}'
+  -d "{\"product_id\":$PRODUCT_ID,\"quantity\":2}"
 ```
 
-### Verify inventory changed
+List orders:
 
 ```bash
-curl "http://localhost:8002/products/<PRODUCT_ID>/availability?quantity=5"
+curl -sS http://localhost:8003/orders
 ```
 
-If inventory started at 6 and order quantity is 2, remaining inventory should be 4.
+Verify inventory was decremented:
 
-## 6. Stop services
+```bash
+curl -sS "http://localhost:8002/products/$PRODUCT_ID/availability?quantity=5"
+```
 
-- `docker compose down`
+## 6. Shutdown and cleanup
 
-To reset local data volumes:
+Stop containers:
 
-- `docker compose down -v`
+```bash
+docker compose down
+```
+
+Stop containers and delete local persistent volumes:
+
+```bash
+docker compose down -v
+```

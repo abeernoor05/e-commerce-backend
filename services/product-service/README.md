@@ -1,28 +1,51 @@
 # product-service
 
-Responsibilities:
-- Create/list products
-- Manage categories
-- Track inventory
+Catalog and inventory microservice for product management.
 
-## Implemented Endpoints
-- `GET /health`: service health check
-- `POST /products`: create product
-- `GET /products`: list products (supports `category` and `in_stock_only` filters)
-- `GET /products/{product_id}`: get one product by id
-- `PATCH /products/{product_id}/inventory`: set inventory count directly
-- `GET /products/{product_id}/availability?quantity=N`: check if stock is enough
-- `POST /products/{product_id}/reserve`: reserve stock (used by order-service flow)
+## Responsibilities
 
-## Code Map
-- `src/main.py`: app bootstrap, router registration, DB init
-- `src/core/config.py`: environment-based settings
-- `src/core/database.py`: SQLAlchemy engine/session/base
-- `src/models/product.py`: product table model
-- `src/schemas/product.py`: request/response models
-- `src/api/routes_products.py`: product and inventory handlers
+- create and list products
+- filter products by category and stock status
+- manage inventory quantities
+- provide availability and reservation APIs for order-service
 
-## Local Quick Test
-1. Create venv and install dependencies
-2. Run app: `uvicorn src.main:app --host 0.0.0.0 --port 8000`
-3. Open docs: `http://localhost:8000/docs`
+## API Endpoints
+
+- GET /health
+- POST /products
+- GET /products
+- GET /products/{product_id}
+- PATCH /products/{product_id}/inventory
+- GET /products/{product_id}/availability?quantity=N
+- POST /products/{product_id}/reserve
+
+## Runtime Configuration
+
+Common environment variables:
+
+- DATABASE_URL
+- SERVICE_NAME
+
+## Source Layout
+
+- src/main.py: application bootstrap and middleware setup
+- src/api/routes_products.py: product and inventory handlers
+- src/core/database.py: SQLAlchemy engine/session wiring
+- src/models/product.py: product ORM model
+- src/schemas/product.py: request and response schemas
+
+## Local Run
+
+```bash
+uvicorn src.main:app --host 0.0.0.0 --port 8000
+```
+
+Open API docs:
+
+- http://localhost:8000/docs
+
+## Integration Notes
+
+- order-service depends on availability and reserve endpoints
+- inventory reservation is synchronous and immediate
+- CORS is enabled for browser-based project demo usage
