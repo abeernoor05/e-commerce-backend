@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: auth-service
-        image: abeer09/auth-service:latest
+        image: abeer09/auth-service:74bfa8218ffdf7e634ba21b601dd9ae77d0e501d
         ports:
         - containerPort: 8000
         readinessProbe:
