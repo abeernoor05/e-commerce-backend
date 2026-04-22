@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E-Commerce Demo UI</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --accent: #0ea5e9;
+      --ok: #16a34a;
+      --err: #dc2626;
+      --border: #dbe3ef;
+    }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 10% 10%, #e8f4ff 0, transparent 40%), var(--bg);
+    }
+    .wrap {
+      max-width: 1000px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+    h1 { margin: 0 0 8px; }
+    p { color: var(--muted); margin-top: 0; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    input, button {
+      padding: 9px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:hover { opacity: 0.95; }
+    .inline { display: flex; gap: 8px; }
+    .inline button { width: auto; }
+    pre {
+      background: #0b1220;
+      color: #cbd5e1;
+      border-radius: 8px;
+      padding: 10px;
+      overflow: auto;
+      min-height: 120px;
+    }
+    .ok { color: var(--ok); }
+    .err { color: var(--err); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>E-Commerce API Demo</h1>
+    <p>Use this page to prove signup, login, product creation, and order creation from a basic interface.</p>
+
+    <div class="card">
+      <div class="grid">
+        <div>
+          <label>EC2 Host/IP</label>
+          <input id="host" placeholder="3.95.22.10" />
+        </div>
+        <div>
+          <label>Auth Port</label>
+          <input id="authPort" value="30081" />
+        </div>
+        <div>
+          <label>Product Port</label>
+          <input id="productPort" value="30082" />
+        </div>
+        <div>
+          <label>Order Port</label>
+          <input id="orderPort" value="30083" />
+        </div>
+      </div>
+      <div class="inline">
+        <button onclick="checkHealth()">Check Health</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>User</h3>
+      <div class="grid">
+        <input id="email" placeholder="demo@example.com" />
+        <input id="password" placeholder="Passw0rd!" />
+        <input id="name" placeholder="Demo User" />
+      </div>
+      <div class="inline">
+        <button onclick="signup()">Sign Up</button>
+        <button onclick="login()">Login</button>
+        <button onclick="me()">Get Profile</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Product</h3>
+      <div class="grid">
+        <input id="productName" value="Demo Keyboard" />
+        <input id="category" value="electronics" />
+        <input id="price" value="99.99" />
+        <input id="inventory" value="10" />
+      </div>
+      <div class="inline">
+        <button onclick="createProduct()">Create Product</button>
+        <button onclick="listProducts()">List Products</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Order</h3>
+      <div class="grid">
+        <input id="productId" placeholder="Product ID" />
+        <input id="quantity" value="1" />
+      </div>
+      <div class="inline">
+        <button onclick="createOrder()">Create Order</button>
+        <button onclick="listOrders()">List Orders</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Output</h3>
+      <pre id="out"></pre>
+      <div id="status"></div>
+    </div>
+  </div>
+
+  <script>
+    let token = "";
+
+    const out = document.getElementById("out");
+    const statusEl = document.getElementById("status");
+
+    const v = (id) => document.getElementById(id).value.trim();
+    const base = (port) => `http://${v("host")}:${port}`;
+
+    function write(title, data) {
+      out.textContent = `${title}\n${JSON.stringify(data, null, 2)}`;
+    }
+
+    function status(message, ok = true) {
+      statusEl.textContent = message;
+      statusEl.className = ok ? "ok" : "err";
+    }
+
+    async function req(url, opts = {}) {
+      const res = await fetch(url, opts);
+      const text = await res.text();
+      let json;
+      try { json = JSON.parse(text); } catch (_) { json = { raw: text }; }
+      if (!res.ok) throw new Error(`${res.status} ${JSON.stringify(json)}`);
+      return json;
+    }
+
+    async function checkHealth() {
+      try {
+        const auth = await req(`${base(v("authPort"))}/health`);
+        const product = await req(`${base(v("productPort"))}/health`);
+        const order = await req(`${base(v("orderPort"))}/health`);
+        write("Health", { auth, product, order });
+        status("All services are reachable.");
+      } catch (e) { status(String(e), false); }
+    }
+
+    async function signup() {
+      try {
+        const data = await req(`${base(v("authPort"))}/auth/signup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: v("email"), password: v("password"), full_name: v("name") })
+        });
+        write("Signup", data);
+        status("Signup success.");
+      } catch (e) { status(String(e), false); }
+    }
+
+    async function login() {
+      try {
+        const data = await req(`${base(v("authPort"))}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: v("email"), password: v("password") })
+        });
+        token = data.access_token;
+        write("Login", data);
+        status("Login success. Token saved.");
+      } catch (e) { status(String(e), false); }
+    }
+
+    async function me() {
+      try {
+        const data = await req(`${base(v("authPort"))}/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        write("Profile", data);
+        status("Profile fetched.");
+      } catch (e) { status(String(e), false); }
+    }
+
+    async function createProduct() {
+      try {
+        const data = await req(`${base(v("productPort"))}/products`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: v("productName"),
+            description: "Created from basic UI",
+            category: v("category"),
+            price: Number(v("price")),
+            inventory_count: Number(v("inventory"))
+          })
+        });
+        document.getElementById("productId").value = data.id;
+        write("Create Product", data);
+        status("Product created.");
+      } catch (e) { status(String(e), false); }
+    }
+
+    async function listProducts() {
+      try {
+        const data = await req(`${base(v("productPort"))}/products`);
+        write("Products", data);
+        status("Products listed.");
+      } catch (e) { status(String(e), false); }
+    }
+
+    async function createOrder() {
+      try {
+        const data = await req(`${base(v("orderPort"))}/orders`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ product_id: Number(v("productId")), quantity: Number(v("quantity")) })
+        });
+        write("Create Order", data);
+        status("Order created.");
+      } catch (e) { status(String(e), false); }
+    }
+
+    async function listOrders() {
+      try {
+        const data = await req(`${base(v("orderPort"))}/orders`);
+        write("Orders", data);
+        status("Orders listed.");
+      } catch (e) { status(String(e), false); }
+    }
+  </script>
+</body>
+</html>

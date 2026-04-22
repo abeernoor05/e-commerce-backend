@@ -1,10 +1,19 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes_auth import router as auth_router
 from src.core.database import Base, engine
 from src.models.user import User  # noqa: F401
 
 app = FastAPI(title="auth-service", version="0.1.1")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def init_db() -> None:
