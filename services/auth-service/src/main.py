@@ -4,7 +4,7 @@ from src.api.routes_auth import router as auth_router
 from src.core.database import Base, engine
 from src.models.user import User  # noqa: F401
 
-app = FastAPI(title="auth-service", version="0.1.0")
+app = FastAPI(title="auth-service", version="0.1.1")
 
 
 def init_db() -> None:
