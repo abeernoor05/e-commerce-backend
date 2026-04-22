@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: product-service
-        image: abeer09/product-service:74bfa8218ffdf7e634ba21b601dd9ae77d0e501d
+        image: abeer09/product-service:b032e02aa87364877ceb568925b747c5b5c3e4c0
         ports:
         - containerPort: 8000
         readinessProbe:
