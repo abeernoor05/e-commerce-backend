@@ -1,0 +1,11 @@
+- name: Install Docker
+  shell: |
+    curl -fsSL https://get.docker.com | sh
+  args:
+    creates: /usr/bin/docker
+
+- name: Enable Docker service
+  service:
+    name: docker
+    enabled: true
+    state: started

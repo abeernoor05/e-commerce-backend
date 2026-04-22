@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+**/.venv/
+*.db
+
+# Env files
+.env
+.env.*
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfplan
+tfplan
+terraform.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# OS/Editor
+.DS_Store
+.vscode/
+
+# Local Ansible inventory generated from current EC2 output
+infra/ansible/inventory/hosts.ini

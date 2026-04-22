@@ -1,0 +1,57 @@
+services:
+  auth-service:
+    build: ./services/auth-service
+    ports:
+      - "8001:8000"
+    environment:
+      - SERVICE_NAME=auth-service
+      - DATABASE_URL=sqlite:////app/data/auth.db
+      - JWT_SECRET=dev-secret-change-me
+    volumes:
+      - auth_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  product-service:
+    build: ./services/product-service
+    ports:
+      - "8002:8000"
+    environment:
+      - SERVICE_NAME=product-service
+      - DATABASE_URL=sqlite:////app/data/product.db
+    volumes:
+      - product_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  order-service:
+    build: ./services/order-service
+    ports:
+      - "8003:8000"
+    environment:
+      - SERVICE_NAME=order-service
+      - DATABASE_URL=sqlite:////app/data/order.db
+      - PRODUCT_SERVICE_URL=http://product-service:8000
+    volumes:
+      - order_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      - product-service
+
+volumes:
+  auth_data:
+  product_data:
+  order_data:

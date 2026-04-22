@@ -1,0 +1,19 @@
+aws_region      = "us-east-1"
+project_name    = "cc-project03"
+vpc_cidr        = "10.0.0.0/16"
+public_subnet_cidr = "10.0.1.0/24"
+# availability_zone = "us-east-1a"
+instance_type   = "m7i-flex.large"
+free_tier_only  = false
+root_volume_size_gb = 30
+
+# Tighten these CIDRs to your IP for better security.
+allowed_ssh_cidrs = ["0.0.0.0/0"]
+allowed_public_http_cidrs = ["0.0.0.0/0"]
+allowed_nodeport_cidrs = ["0.0.0.0/0"]
+allowed_k8s_api_cidrs = ["0.0.0.0/0"]
+
+public_key_path = "~/.ssh/id_rsa.pub"
+
+# Alternative profile:
+# instance_type = "c7i-flex.large"

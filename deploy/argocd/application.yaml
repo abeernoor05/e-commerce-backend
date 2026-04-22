@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ecommerce-dev
+  namespace: argocd
+  annotations:
+    # Used by common ArgoCD image updater setups; optional if image updater is added later.
+    argocd-image-updater.argoproj.io/image-list: auth-service=abeer09/auth-service,product-service=abeer09/product-service,order-service=abeer09/order-service
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/REPLACE_WITH_YOUR_USERNAME/REPLACE_WITH_YOUR_REPO.git
+    targetRevision: main
+    path: deploy/k8s/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ecommerce
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

@@ -1,0 +1,11 @@
+- name: Install k3s
+  shell: |
+    curl -sfL https://get.k3s.io | sh -
+  args:
+    creates: /usr/local/bin/k3s
+
+- name: Ensure k3s is running
+  service:
+    name: k3s
+    enabled: true
+    state: started
